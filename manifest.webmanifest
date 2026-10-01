@@ -1,0 +1,13 @@
+{
+  "name": "ساعاتي — تسجيل الدوام والأجر",
+  "short_name": "ساعاتي",
+  "description": "تسجيل ساعات العمل وحساب الأجر والسلف والدفعات",
+  "lang": "ar",
+  "dir": "rtl",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f2f7f7",
+  "theme_color": "#0f6976",
+  "icons": [{"src":"icon.svg","sizes":"any","type":"image/svg+xml","purpose":"any maskable"}]
+}

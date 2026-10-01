@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#0f6976">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="ساعاتي">
+  <title>ساعاتي</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icon.svg">
+  <link rel="apple-touch-icon" href="icon.svg">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="topbar"><strong id="pageTitle">الرئيسية</strong><span id="onlineState">●</span></header>
+  <main id="app" aria-live="polite"></main>
+  <nav class="tabs" aria-label="التنقل الرئيسي">
+    <button data-page="home" class="active"><span>⌂</span>الرئيسية</button>
+    <button data-page="history"><span>≡</span>السجل</button>
+    <button data-page="calendar"><span>▦</span>التقويم</button>
+    <button data-page="reports"><span>◫</span>التقارير</button>
+    <button data-page="settings"><span>⚙</span>الإعدادات</button>
+  </nav>
+  <dialog id="modal"><form method="dialog" id="modalForm"><header><h2 id="modalTitle"></h2><button class="icon" value="cancel" aria-label="إغلاق">×</button></header><div id="modalBody"></div></form></dialog>
+  <div id="toast" role="status"></div>
+  <script src="app.js" defer></script>
+</body>
+</html>
