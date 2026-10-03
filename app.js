@@ -7,6 +7,7 @@ const localInput=d=>`${isoDate(d)}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 const uid=()=>Date.now()+Math.floor(Math.random()*10000);
 const defaults={settings:{workerName:'',employerName:'',rate:20,currency:'₪',breakMinutes:30,overtimeEnabled:false,dailyMinutes:480,overtimeMultiplier:1.5,holidayMultiplier:2,theme:'system',payCycleStart:1,startTime:'07:00',endTime:'16:00',longShiftMinutes:720},sessions:[],transactions:[],version:1};
 let state=load(), page='home', tick, reportRange='month';
+let calendarMonth=null, calendarSelectedDay=null;
 
 function load(){try{const x=JSON.parse(localStorage.getItem(KEY));return x?{...structuredClone(defaults),...x,settings:{...defaults.settings,...x.settings}}:structuredClone(defaults)}catch{return structuredClone(defaults)}}
 function save(){localStorage.setItem(KEY,JSON.stringify(state));renderBadges()}
@@ -109,7 +110,56 @@ function renderHistory(){const done=completed(),from=$('#histFrom')?.value||'',t
 function sessionRow(s){return `<div class="session"><div class="session-title">${fmtTime(s.start)} – ${fmtTime(s.end)} | استراحة ${s.breakMinutes} دقيقة</div><div class="session-detail">${duration(s.net)} — <span class="money">${money(s.pay)}</span>${s.notes?`<br>${esc(s.notes)}`:''}</div><div class="grid2"><button class="action small edit-session" data-id="${s.id}">تعديل</button><button class="action danger small delete-session" data-id="${s.id}">حذف</button></div></div>`}
 function bindSessionActions(){$$('.edit-session').forEach(b=>b.onclick=()=>sessionForm(state.sessions.find(x=>x.id==b.dataset.id)));$$('.delete-session').forEach(b=>b.onclick=()=>{if(confirm('حذف فترة الدوام؟')){state.sessions=state.sessions.filter(x=>x.id!=b.dataset.id);save();render()}})}
 
-function renderCalendar(){const now=new Date(),ym=`${now.getFullYear()}-${pad(now.getMonth()+1)}`,days=new Date(now.getFullYear(),now.getMonth()+1,0).getDate(),done=completed();$('#app').innerHTML=`<h1>التقويم</h1><p class="subtitle">${new Intl.DateTimeFormat('ar',{month:'long',year:'numeric'}).format(now)}</p><section class="card"><div class="calendar-grid" style="display:grid;grid-template-columns:repeat(7,1fr);gap:7px;text-align:center">${['ح','ن','ث','ر','خ','ج','س'].map(x=>`<b>${x}</b>`).join('')}${Array(new Date(now.getFullYear(),now.getMonth(),1).getDay()).fill('<i></i>').join('')}${Array.from({length:days},(_,i)=>{const d=`${ym}-${pad(i+1)}`,ss=done.filter(x=>isoDate(dt(x.start))===d);return `<button class="chip ${ss.length?'active':''}" style="padding:9px 2px" data-date="${d}">${i+1}${ss.length?'<small style="display:block">✓</small>':''}</button>`}).join('')}</div></section><div id="calendarDay"></div>`;$$('[data-date]').forEach(b=>b.onclick=()=>{const ss=done.filter(x=>isoDate(dt(x.start))===b.dataset.date);$('#calendarDay').innerHTML=ss.length?`<section class="card"><h2>${fmtDate(b.dataset.date)}</h2>${ss.map(sessionRow).join('')}</section>`:'<div class="card empty">لا يوجد دوام في هذا اليوم</div>';bindSessionActions()})}
+function changeCalendarMonth(offset){
+  calendarMonth=new Date(calendarMonth.getFullYear(),calendarMonth.getMonth()+offset,1);
+  calendarSelectedDay=null;
+  renderCalendar();
+}
+function renderCalendarDay(){
+  if(!calendarSelectedDay){$('#calendarDay').innerHTML='';return}
+  const sessions=completed().filter(x=>isoDate(dt(x.start))===calendarSelectedDay);
+  const [year,month,day]=calendarSelectedDay.split('-').map(Number);
+  $('#calendarDay').innerHTML=`<section class="card"><h2>${fmtDate(new Date(year,month-1,day))}</h2>${sessions.length?sessions.map(sessionRow).join(''):'<p class="empty">لا يوجد دوام في هذا اليوم</p>'}</section>`;
+  $$('.calendar-grid [data-calendar-date]').forEach(button=>{
+    const selected=button.dataset.calendarDate===calendarSelectedDay;
+    button.classList.toggle('selected-day',selected);
+    button.setAttribute('aria-pressed',String(selected));
+  });
+  bindSessionActions();
+}
+function renderCalendar(){
+  const now=new Date();
+  if(!calendarMonth)calendarMonth=new Date(now.getFullYear(),now.getMonth(),1);
+  const year=calendarMonth.getFullYear(),month=calendarMonth.getMonth();
+  const ym=`${year}-${pad(month+1)}`,days=new Date(year,month+1,0).getDate();
+  const done=completed(),workDays=new Set(done.map(x=>isoDate(dt(x.start))));
+  const monthLabel=new Intl.DateTimeFormat('ar',{calendar:'gregory',month:'long',year:'numeric'}).format(calendarMonth);
+  $('#app').innerHTML=`<h1>التقويم</h1>
+    <p class="subtitle" id="calendarMonthLabel" aria-live="polite">${monthLabel}</p>
+    <nav class="calendar-navigation" aria-label="التنقل بين الأشهر">
+      <button type="button" class="chip" id="calendarPrev">الشهر السابق</button>
+      <button type="button" class="chip" id="calendarToday">الشهر الحالي</button>
+      <button type="button" class="chip" id="calendarNext">الشهر التالي</button>
+    </nav>
+    <section class="card"><div class="calendar-grid" style="display:grid;grid-template-columns:repeat(7,1fr);gap:7px;text-align:center">
+      ${['ح','ن','ث','ر','خ','ج','س'].map(x=>`<b>${x}</b>`).join('')}
+      ${Array(calendarMonth.getDay()).fill('<i aria-hidden="true"></i>').join('')}
+      ${Array.from({length:days},(_,i)=>{
+        const date=`${ym}-${pad(i+1)}`,hasWork=workDays.has(date);
+        return `<button type="button" class="chip ${hasWork?'active':''}" style="padding:9px 2px" data-calendar-date="${date}" aria-label="${i+1} ${monthLabel}${hasWork?'، يوجد دوام':''}" aria-pressed="false">${i+1}${hasWork?'<small style="display:block" aria-hidden="true">✓</small>':''}</button>`;
+      }).join('')}
+    </div></section><div id="calendarDay"></div>`;
+  $('#calendarPrev').onclick=()=>changeCalendarMonth(-1);
+  $('#calendarNext').onclick=()=>changeCalendarMonth(1);
+  $('#calendarToday').onclick=()=>{
+    const current=new Date();calendarMonth=new Date(current.getFullYear(),current.getMonth(),1);
+    calendarSelectedDay=null;renderCalendar();
+  };
+  $$('.calendar-grid [data-calendar-date]').forEach(button=>button.onclick=()=>{
+    calendarSelectedDay=button.dataset.calendarDate;renderCalendarDay();
+  });
+  renderCalendarDay();
+}
 
 function rangeDates(kind=reportRange){const n=new Date(),to=isoDate(n),from=new Date(n);if(kind==='week')from.setDate(n.getDate()-6);else if(kind==='month')from.setDate(1);else if(kind==='cycle'){from.setDate(Math.min(28,state.settings.payCycleStart));if(from>n)from.setMonth(from.getMonth()-1)}else from.setFullYear(n.getFullYear(),0,1);return [isoDate(from),to]}
 function reportData(from,to){const ss=inRange(completed(),from,to),tx=inRange(state.transactions,from,to,'date');return {ss,tx,due:netDue(ss,tx)}}
