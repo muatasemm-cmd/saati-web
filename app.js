@@ -49,20 +49,50 @@ function renderHome(){
   const week=inRange(done,isoDate(weekAgo),td), month=inRange(done,`${now.getFullYear()}-${pad(now.getMonth()+1)}-01`,td);
   $('#app').innerHTML=`<section class="hero"><div><h1>ساعاتي</h1><div class="subtitle">${new Intl.DateTimeFormat('ar',{dateStyle:'full'}).format(now)}</div><div class="clock" id="clock"></div></div><div class="badge">دوامي اليوم</div></section>
   ${!matchMedia('(display-mode: standalone)').matches?'<div class="card install-note no-print">لإضافته كتطبيق: اضغط زر المشاركة في Safari ثم «إضافة إلى الشاشة الرئيسية».</div>':''}
-  <section class="card live"><div class="status">${a?'الدوام جارٍ الآن':'جاهز لبدء الدوام'}</div><div class="subtitle">${a?`بدأت عند ${fmtTime(a.start)}`:'سجّل بداية دوامك بضغطة واحدة'}</div><div class="duration" id="liveDuration">${a?duration(calc(a.start,new Date(),a.breakMinutes).net):'0 ساعة و0 دقيقة'}</div><div class="subtitle">الأجر المحسوب حتى الآن</div><div class="earn" id="livePay">${a?money(calc(a.start,new Date(),a.breakMinutes).pay):money(0)}</div></section>
-  ${a?'<div class="grid2"><button class="action secondary" id="breakBtn">تعديل الاستراحة</button><button class="action danger" id="endBtn">إنهاء الدوام</button></div>':'<button class="action success" id="startBtn">بدء الدوام</button>'}
+  <section class="card live"><div class="status">${a?'الدوام جارٍ الآن':'جاهز لبدء الدوام'}</div><div class="subtitle">${a?`بدأت عند ${fmtTime(a.start)}`:'سجّل بداية دوامك بضغطة واحدة'}</div><div class="duration" id="liveDuration">${a?duration(calc(a.start,new Date(),a.breakMinutes,a.holiday,a.rate).net):'0 ساعة و0 دقيقة'}</div><div class="subtitle">الأجر المحسوب حتى الآن</div><div class="earn" id="livePay">${a?money(calc(a.start,new Date(),a.breakMinutes,a.holiday,a.rate).pay):money(0)}</div></section>
+  ${a?'<button class="action secondary" id="editStartBtn">تعديل وقت البداية</button><div class="grid2"><button class="action secondary" id="breakBtn">تعديل الاستراحة</button><button class="action danger" id="endBtn">إنهاء الدوام</button></div>':'<button class="action success" id="startBtn">بدء الدوام</button>'}
   <h2 class="section-title">ملخص سريع</h2><section class="grid2"><div class="metric">ساعات اليوم<strong>${duration(sum(todaySessions,'net'))}</strong></div><div class="metric">أجر اليوم<strong>${money(sum(todaySessions,'pay'))}</strong></div><div class="metric">ساعات الأسبوع<strong>${duration(sum(week,'net'))}</strong></div><div class="metric">مستحقات الشهر<strong>${money(netDue(month,state.transactions.filter(x=>x.date.startsWith(`${now.getFullYear()}-${pad(now.getMonth()+1)}`))))}</strong></div></section>
   <button class="action secondary" id="manualBtn">＋ نسيت التسجيل؟ أضف دواماً يدوياً</button>
   ${done[0]?`<div class="card muted">آخر دوام: ${fmtDate(done[0].start)}، ${duration(done[0].net)} — ${money(done[0].pay)}</div>`:''}`;
-  const update=()=>{const n=new Date();$('#clock').textContent=n.toLocaleTimeString('ar',{hour:'2-digit',minute:'2-digit',second:'2-digit'});if(a){const c=calc(a.start,n,a.breakMinutes);$('#liveDuration').textContent=duration(c.net);$('#livePay').textContent=money(c.pay)}};update();tick=setInterval(update,1000);
-  $('#startBtn')?.addEventListener('click',startWork);$('#endBtn')?.addEventListener('click',endWork);$('#breakBtn')?.addEventListener('click',editBreak);$('#manualBtn').onclick=()=>sessionForm();
+  const update=()=>{const n=new Date();$('#clock').textContent=n.toLocaleTimeString('ar',{hour:'2-digit',minute:'2-digit',second:'2-digit'});if(a){const c=calc(a.start,n,a.breakMinutes,a.holiday,a.rate);$('#liveDuration').textContent=duration(c.net);$('#livePay').textContent=money(c.pay)}};update();tick=setInterval(update,1000);
+  $('#startBtn')?.addEventListener('click',startWork);$('#endBtn')?.addEventListener('click',endWork);$('#breakBtn')?.addEventListener('click',editBreak);$('#editStartBtn')?.addEventListener('click',editActiveStart);$('#manualBtn').onclick=()=>sessionForm();
 }
 function startWork(){
   const now=new Date(), [h,m]=state.settings.startTime.split(':').map(Number), expected=new Date(now);expected.setHours(h,m,0,0);const diff=Math.abs(now-expected)/60000;
   const go=()=>{state.sessions.push({id:uid(),start:now.toISOString(),end:null,breakMinutes:state.settings.breakMinutes,holiday:false,notes:'',rate:state.settings.rate,active:true,manual:false});save();render();toast('بدأ الدوام')};
   if(diff>90&&!confirm(`الوقت الحالي بعيد عن موعد الدوام المعتاد (${state.settings.startTime}). هل تريد البدء؟`))return;go();
 }
-function endWork(){const a=active();if(!a)return;const c=calc(a.start,new Date(),a.breakMinutes);if(c.gross>state.settings.longShiftMinutes&&!confirm(`الدوام طويل: ${duration(c.gross)}. هل تريد إنهاءه الآن؟`))return;a.end=new Date().toISOString();a.active=false;save();render();toast('تم حفظ الدوام')}
+function editActiveStart(){
+  const session=active();
+  if(!session)return;
+  modal('تعديل وقت البداية',`
+    <p class="muted">نسيت تشغيل الدوام؟ اختر وقت بدايتك الفعلي. سيُحدّث العداد والأجر ويبقى الدوام شغّالاً.</p>
+    <div class="field"><label for="activeStart">تاريخ ووقت البداية الفعلي</label><input id="activeStart" type="datetime-local" value="${localInput(dt(session.start))}" max="${localInput(new Date())}" required></div>
+    <p id="startPreview" class="muted"></p>
+    <p id="startError" class="danger-text" role="alert"></p>
+    <button type="button" class="action" id="saveActiveStart">حفظ ومتابعة الدوام</button>`);
+  const input=$('#activeStart'),error=$('#startError');
+  const preview=()=>{
+    const value=dt(input.value);
+    $('#startPreview').textContent=Number.isFinite(value.getTime())?`البداية: ${fmtDate(value)}، ${fmtTime(value)}`:'';
+    error.textContent='';
+  };
+  input.oninput=preview;preview();
+  $('#saveActiveStart').onclick=()=>{
+    const current=active(),start=dt(input.value),now=new Date();
+    if(!current||current.id!==session.id){closeModal();render();return toast('تغيّر الدوام الجاري. افتحه من جديد')}
+    if(!Number.isFinite(start.getTime())){error.textContent='اختر تاريخاً ووقتاً صحيحين';return}
+    if(start>now){error.textContent='وقت البداية لا يمكن أن يكون في المستقبل';return}
+    if(state.sessions.some(x=>x.id!==current.id&&start<dt(x.end||now)&&now>dt(x.start))){
+      error.textContent='الوقت المختار يتداخل مع دوام مسجّل. اختر بداية بعد نهايته';return;
+    }
+    const previous=current.start;
+    current.start=start.toISOString();
+    try{save()}catch{current.start=previous;error.textContent='تعذّر حفظ التعديل. حاول مجدداً';return}
+    closeModal();render();toast('تم تعديل البداية، والدوام مستمر');
+  };
+}
+function endWork(){const a=active();if(!a)return;const c=calc(a.start,new Date(),a.breakMinutes,a.holiday,a.rate);if(c.gross>state.settings.longShiftMinutes&&!confirm(`الدوام طويل: ${duration(c.gross)}. هل تريد إنهاءه الآن؟`))return;a.end=new Date().toISOString();a.active=false;save();render();toast('تم حفظ الدوام')}
 function editBreak(){const a=active(),v=prompt('مدة الاستراحة بالدقائق',a.breakMinutes);if(v===null)return;const n=Math.max(0,Number(v)||0);if(n>mins(a.start,new Date()))return toast('الاستراحة أطول من مدة الدوام');a.breakMinutes=n;save();render()}
 
 function sessionForm(existing){const s=existing||{},start=s.start?dt(s.start):new Date(),end=s.end?dt(s.end):new Date(start.getTime()+9*3600000);modal(existing?'تعديل الدوام':'إضافة دوام يدوي',`
