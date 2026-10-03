@@ -99,4 +99,17 @@ function backup(){const envelope={App:'SaatiWeb',Version:1,ExportedAt:new Date()
 async function restore(e){const file=e.target.files[0];if(!file)return;try{const x=JSON.parse(await file.text());let d=x.Data||x.data||x;if(d.Settings||d.settings&&d.Sessions){const S=d.Settings||d.settings, sessions=d.Sessions||d.sessions||[],transactions=d.Transactions||d.transactions||[];state={version:1,settings:{...defaults.settings,workerName:S.WorkerName??S.workerName??'',employerName:S.EmployerName??'',rate:S.NormalHourlyRate??S.rate??20,currency:S.CurrencySymbol??S.currency??'₪',breakMinutes:S.DefaultBreakMinutes??S.breakMinutes??30,overtimeEnabled:S.OvertimeEnabled??false,dailyMinutes:S.DailyRegularMinutes??480,overtimeMultiplier:S.OvertimeMultiplier??1.5,holidayMultiplier:S.HolidayMultiplier??2,theme:'system',payCycleStart:S.PayCycleStartDay??1,startTime:'07:00',endTime:'16:00',longShiftMinutes:S.LongShiftWarningMinutes??720},sessions:sessions.map(x=>({id:x.Id??uid(),start:x.Start,end:x.End,breakMinutes:x.BreakMinutes??0,holiday:x.IsHoliday??false,notes:x.Notes??'',rate:x.NormalHourlyRateSnapshot??20,active:x.IsActive??false,manual:x.IsManual??false})),transactions:transactions.map(x=>({id:x.Id??uid(),date:String(x.Date).slice(0,10),type:['bonus','deduction','payment','advance','adjustment'][x.Type??0],amount:x.Amount,notes:x.Notes??''}))}}else if(d.sessions&&d.settings)state={...structuredClone(defaults),...d,settings:{...defaults.settings,...d.settings}};else throw Error();save();render();toast('تم استيراد النسخة بنجاح')}catch{toast('ملف النسخة الاحتياطية غير صالح')}}
 function download(name,text,type){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([text],{type}));a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000)}
 
-$$('.tabs button').forEach(b=>b.onclick=()=>{page=b.dataset.page;render();scrollTo({top:0,behavior:'smooth'})});addEventListener('online',renderBadges);addEventListener('offline',renderBadges);matchMedia('(prefers-color-scheme:dark)').addEventListener('change',setTheme);if('serviceWorker'in navigator)navigator.serviceWorker.register('sw.js');render();
+function importFromPrivateLink(){
+  if(!location.hash.startsWith('#import='))return false;
+  try{
+    const encoded=location.hash.slice(8).replace(/-/g,'+').replace(/_/g,'/');
+    const bytes=Uint8Array.from(atob(encoded),c=>c.charCodeAt(0));
+    const incoming=JSON.parse(new TextDecoder().decode(bytes));
+    if(!incoming?.settings||!Array.isArray(incoming.sessions)||!Array.isArray(incoming.transactions))throw Error();
+    state={...structuredClone(defaults),...incoming,settings:{...defaults.settings,...incoming.settings}};
+    save();history.replaceState(null,'',location.pathname+location.search);return true;
+  }catch{history.replaceState(null,'',location.pathname+location.search);return false}
+}
+
+const importedFromLink=importFromPrivateLink();
+$$('.tabs button').forEach(b=>b.onclick=()=>{page=b.dataset.page;render();scrollTo({top:0,behavior:'smooth'})});addEventListener('online',renderBadges);addEventListener('offline',renderBadges);matchMedia('(prefers-color-scheme:dark)').addEventListener('change',setTheme);if('serviceWorker'in navigator)navigator.serviceWorker.register('sw.js');render();if(importedFromLink)setTimeout(()=>toast('تم نقل بيانات تطبيق الآيفون بنجاح'),250);
